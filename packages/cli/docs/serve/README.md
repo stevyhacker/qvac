@@ -24,6 +24,8 @@ Configuration lives under `serve` in `qvac.config.*`. `serve.models`, `serve.loa
 `serve.cors` are server-wide and documented here; each extension reads its own
 `serve.<name>` block, documented in that extension's page.
 
+## Errors
+
 An SDK `ContextOverflowError` returns HTTP `400` with
 `error.type: "invalid_request_error"` and `error.code: "context_length_exceeded"`.
 Shorten the input, start a new conversation, or increase the model's `ctx_size`

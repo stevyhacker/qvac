@@ -1,13 +1,12 @@
 import fp from 'fastify-plugin'
 import type { FastifyError, FastifyPluginAsync } from 'fastify'
-import { ContextOverflowError } from '@qvac/sdk'
+import { ContextOverflowError, RequestRejectedByPolicyError } from '@qvac/sdk'
 import {
   hasZodFastifySchemaValidationErrors,
   isResponseSerializationError
 } from 'fastify-type-provider-zod'
 import { HttpError, errorType } from '@/serve/lib/http-error'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
-import { RequestRejectedByPolicyError } from '@qvac/sdk'
 
 export interface ErrorHandlerOptions {
   /**
@@ -29,6 +28,10 @@ const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
   const fieldCodes = { ...CORE_FIELD_CODES, ...opts.fieldCodes }
 
   app.setErrorHandler((err: FastifyError, req, reply) => {
+    // Disconnect cancellation can reject after the client has gone. There is
+    // no response left to send, and this is not a server failure to log.
+    if (reply.raw.destroyed || reply.raw.writableEnded) return
+
     const sseSentinel = req.routeOptions?.config?.sseSentinel ?? true
     const contextOverflow = err instanceof ContextOverflowError
     const httpError = contextOverflow
@@ -48,7 +51,7 @@ const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
       }
       sendSSE(reply.raw, {
         error: {
-          message,
+          message: httpError?.message ?? 'An internal error occurred.',
           type: contextOverflow ? 'invalid_request_error' : 'server_error',
           code: httpError?.code ?? 'internal_error'
         }

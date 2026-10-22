@@ -2,9 +2,8 @@ import type { ServerResponse } from 'node:http'
 import type { FastifyReply } from 'fastify'
 
 export function initSSE(reply: FastifyReply, extraHeaders?: Record<string, string | number>): void {
-  // The async route owns writing and ending the raw response. Keep it in
-  // Fastify's lifecycle so a rejected inference reaches the error handler;
-  // hijack() marks reply.sent before any bytes finish and suppresses that path.
+  // The route ends the raw response itself. The reply stays managed so errors
+  // reach the error handler.
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',

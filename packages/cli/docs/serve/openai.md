@@ -267,7 +267,7 @@ and the chat template decides how much earlier reasoning stays in the cache.
 | 503  | `model_load_failed`       | Lazy load (cold start) of the model failed                                     |
 | 503  | `model_load_timeout`      | Lazy load exceeded `serve.load.timeoutMs`                                      |
 | 503  | `model_not_ready`         | Rare fallback: load reported done but the model is not READY                   |
-| 500  | `completion_error`        | SDK / engine failure                                                           |
+| 500  | `internal_error`          | SDK / engine failure                                                           |
 
 ## `POST /v1/responses`
 
