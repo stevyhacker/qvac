@@ -384,18 +384,28 @@ const MODEL_CONFIGS = {
       'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
     embeddingDimension: 1024,
     maxContextSize: 512
+  },
+  // A reranker (cross-encoder) for rerank.test.js, the one llama-server's
+  // rerank tests use. Not an embedding model: getModelConfigs() leaves it out.
+  'jina-reranker-v1-tiny-en-f16.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/models/resolve/main/jina-reranker-v1-tiny-en/ggml-model-f16.gguf',
+    reranker: true,
+    maxContextSize: 8192
   }
 }
 
 /**
- * Gets all available model configurations
+ * Gets the embedding model configurations (rerankers are left out)
  * @returns {Array<{modelName: string, config: Object}>}
  */
 function getModelConfigs() {
-  return Object.entries(MODEL_CONFIGS).map(([modelName, config]) => ({
-    modelName,
-    config
-  }))
+  return Object.entries(MODEL_CONFIGS)
+    .filter(([, config]) => !config.reranker)
+    .map(([modelName, config]) => ({
+      modelName,
+      config
+    }))
 }
 
 /**
@@ -479,6 +489,36 @@ async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
     throw new Error(`[prestage] ${verb} model ${modelName} failed integrity: ${res.reason}`)
   }
   return how
+}
+
+// The Laya GGUF laya.test.js runs. It has no Hugging Face source, so it is not
+// in models.manifest.json: desktop CI points LAYA_TEST_MODEL at a copy staged
+// from S3 (project.json modelS3), and the mobile run pre-stages it from a
+// presigned URL (scripts/generate-laya-presigned-url.sh). Pinned here so the
+// staged copy is verified as a manifest model is.
+const LAYA_TEST_GGUF = {
+  name: 'laya-multilingual-Q8_0.gguf',
+  sha256: '59a61f840e6f125c25037f7cc0363efafee1aeea3394b504d25551b4bda5a219',
+  bytes: 348425664
+}
+
+// Mobile: the pre-staged Laya GGUF, verified in the writable model dir (as
+// _benchmark-perf.js places its models). Throws when it was not staged: a
+// mobile run that skipped the Laya tests would pass without testing anything.
+async function ensurePrestagedLayaModel() {
+  const { name } = LAYA_TEST_GGUF
+  const stagedDir = prestagedModelDir(name)
+  if (!stagedDir) {
+    throw new Error(`[prestage] ${name} was not pre-staged on this device`)
+  }
+  const modelDir = path.join(global.testDir || os.tmpdir(), 'test', 'model')
+  fs.mkdirSync(modelDir, { recursive: true })
+  const modelPath = path.join(modelDir, name)
+  if (fs.existsSync(modelPath) && (await verifyModelFileOnce(modelPath, LAYA_TEST_GGUF)).ok) {
+    return modelPath
+  }
+  await copyPrestagedModel({ stagedDir, modelName: name, modelPath, entry: LAYA_TEST_GGUF })
+  return modelPath
 }
 
 /**
@@ -717,6 +757,8 @@ function safeTest(name, opts, fn) {
 module.exports = {
   downloadFile,
   ensureModel,
+  ensurePrestagedLayaModel,
+  LAYA_TEST_GGUF,
   loadManifest,
   resolveModelEntry,
   verifyModelFile,
