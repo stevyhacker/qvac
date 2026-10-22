@@ -54,6 +54,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-sdk-pr-status`](../qv-sdk-pr-status/SKILL.md) | Team SDK pod PR dashboard. | SDK pod PR queue. **Manual:** `/qv-sdk-pr-status` |
 | [`qv-sdk-changelog`](../qv-sdk-changelog/SKILL.md) | Changelogs for SDK pod packages (tag-based GitFlow). | Release prep, `CHANGELOG_LLM.md`. **Auto** |
 | [`qv-sdk-backmerge`](../qv-sdk-backmerge/SKILL.md) | Open backmerge PR (release version bump + changelog → `main`). | After SDK release PR; often chained from `qv-sdk-pr-create`. **Auto** |
+| [`qv-release-train`](../qv-release-train/SKILL.md) | Release a whole dependency chain from one branch and one publish run. | Engine + SDK + agent stack moving together. **Auto** |
 | [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk/e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
 | [`qv-sdk-update-models`](../qv-sdk-update-models/SKILL.md) | Regen SDK `models.ts` from live registry and open a `[mod]` PR; optional provider/python cascade. | After registry model updates; `/qv-sdk-update-models`. **Manual** |
 | [`qv-agent-stack-sync`](../qv-agent-stack-sync/SKILL.md) | Plan / draft-cascade / promote the SDK → CLI → AI SDK provider → OpenCode + OpenClaw release chain. | Agent-stack release prep; `/qv-agent-stack-sync --plan`. **Auto** |
@@ -119,6 +120,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | Skill | Purpose | Use when |
 |-------|---------|----------|
 | [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
+| [`qv-docs-line-cut`](../qv-docs-line-cut/SKILL.md) | Cuts the next documentation line of every versioned collection whose release has shipped. | A release went live, or a sprint starts and the coming version needs a folder to land in. **Manual:** `/qv-docs-line-cut` |
 
 ---
 
@@ -152,6 +154,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | SDK release changelog | `qv-sdk-changelog` |
 | Addon release changelog | `qv-addon-changelog` |
 | Backmerge after SDK release | `qv-sdk-backmerge` |
+| Release engine + SDK + agent stack together | `qv-release-train` |
 | Sync CLI/provider/OpenCode/OpenClaw to SDK | `qv-agent-stack-sync` |
 | New SDK e2e tests | `qv-sdk-e2e-create` |
 | Registry Autobase/HyperDB help | `qv-registry-autobase-patterns` |
@@ -159,6 +162,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
 | Update the docs website after an SDK/CLI change | `qv-docs-update` |
+| Cut the next docs line after a release | `qv-docs-line-cut` |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |
