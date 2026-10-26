@@ -4,6 +4,19 @@
 
 ### Changed
 
+- `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.23.0`, which carries
+  `qvac-fabric` `11018.2.0` -> `11259.0.0`, a rebase onto upstream llama.cpp
+  b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171)). A caret on a
+  `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.23.0`
+  on its own. The native API changes, so the native addon is rebuilt against
+  the 0.23.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.0` together.
+
+## [0.16.1] - 2026-10-15
+
+### Changed
+
 - `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
   `qvac-fabric` `11018.1.0#1` -> `11018.2.0`. A caret on a `0.x` version
   locks the minor, so `^0.21.1` would not have resolved `0.22.0` on its own.
@@ -11,6 +24,13 @@
   0.22.0 headers.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.22.0` together.
+
+### Fixed
+
+- On Windows, the addon now binds the delay-loaded `@qvac/fabric` runtime
+  when it loads, so a first fabric call on a worker thread cannot fail with
+  `0xC06D007E` ([#5121](https://github.com/tetherto/qvac/pull/5121)). Loading throws an error naming the fabric
+  module if the bind fails.
 
 ## [0.16.0] - 2026-10-14
 

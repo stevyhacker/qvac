@@ -17,6 +17,22 @@ LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 
 
+### CosyVoice3 Core ML sidecars
+
+Apple builds support optional CosyVoice3 Core ML sidecars through the native
+`speech-cpp` 2026-10-19 dependency. Export and placement details are in the
+[CosyVoice3 Core ML guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/ea128498e23d20cd122729275e92361b11a361df/engines/tts/docs/cosyvoice3.md#core-ml-sidecars).
+Re-export existing CosyVoice3 LM sidecars with the updated exporter to include
+the cache feedback correction for consecutive predictions.
+
+The LM, flow frontend/decoder, F0 predictor and HiFT vocoder use resident
+sidecars when present and fall back to ggml when unavailable. HiFT exports
+use FP32 for waveform parity. Core ML chooses operation placement, so a
+sidecar does not guarantee ANE execution or a speed improvement.
+When a sidecar is present, `assessFit` returns an error with reason
+`coreml-memory-estimate-unavailable`; its memory usage is not projected.
+
+
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
@@ -38,7 +54,7 @@ and registry prerequisites described under [MOSS](#moss).
 
 - Batch synthesis (`run({ input })` → single PCM buffer).
 - **Sentence-granularity streaming** — `runStreaming(asyncIterable)`:
-  yields one audio chunk per input sentence.
+  yields audio for each input sentence; Audio8 emits PCM as codec windows finish.
 - **Native per-chunk streaming** — set `streamChunkTokens` and audio
   flows out of the C++ engine chunk-by-chunk as T3 tokens produce
   S3Gen+HiFT output; sub-second first-audio-out inside a single
@@ -966,6 +982,19 @@ await model.load()
 await model.run({ input: 'Hello from a fully on-device pipeline.' })
 ```
 
+`runStream(text)`, `runStreaming(asyncIterable)` and
+`run({ input: text, streamOutput: true })` emit PCM as codec windows finish,
+before the current text chunk's complete waveform is ready. Ordinary `run()`
+retains batch synthesis. Native end markers have an empty `outputArray`. Use `response.await()`
+for completion and aggregate statistics, including for asynchronous text input. PCM window sizes are fixed by the codec, so
+`streamChunkTokens` and `streamFirstChunkTokens` remain unsupported.
+
+The native streaming API is included in the pinned `speech-cpp` dependency.
+Rebuild the addon to use it; an older published prebuild does not gain native
+streaming from a JavaScript update alone.
+Use [audio8-streaming.js](examples/audio8-streaming.js) to measure first PCM
+and completion through the wrapper, excluding model loading.
+
 Sampling is **repetition-aware**: a semantic token that repeats one from the
 recent window is re-drawn under a narrower nucleus at a higher temperature,
 which is what keeps the model out of the babble attractor that pure top-p
@@ -1074,20 +1103,16 @@ The combined desktop CUDA/Vulkan speech changes in
 [Vulkan #308](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/308),
 including [CUDA #321](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/321),
 merged to native master at `84b02694001cfea863167776dbc185474a816656`.
-This checkout consumes the merged [registry #423](https://github.com/tetherto/qvac-registry-vcpkg/pull/423)
-at `e31be272ecdf9f20970302ebf8a2943d47803001`: `speech-cpp` 2026-10-12#1
-pins that merged revision, and `ggml-speech` 2026-10-07#1 pins
-`06f1b66806626a635904f31db6914ad2d0e71197`. The earlier native `f4d4c257`
+The exact native dependency versions are declared in [vcpkg.json](vcpkg.json),
+and the registry configuration is declared in
+[vcpkg-configuration.json](vcpkg-configuration.json). The earlier native `f4d4c257`
 passed ten smaller-model CUDA/Vulkan cases; those results do not establish GPU
 validation of the final native revision or the packaged addon. Rebuild the addon
 before running its GPU tests. Native desktop results also do not establish
 Android support or speech-quality signoff.
 
-The registry `baseline` is the main commit containing #423. The shared exact
-`speech-cpp` overrides and backend implementation are already on qvac main.
-This baseline update completes the TTS registry configuration; packaged-addon
-CUDA/Vulkan inference still requires validation on provisioned GPU hosts before
-claiming a validated release.
+Packaged-addon CUDA/Vulkan inference still requires validation on provisioned
+GPU hosts before claiming a validated release.
 
 From `packages/tts-ggml`, resolve the checked-in manifest without building or
 downloading models (with `VCPKG_ROOT` set):
@@ -1130,7 +1155,29 @@ case completes. Run both files together without test filters: a successful full
 run has 12 passing tests, including the two completion checks, and no skips.
 Preflight only checks asset presence; actual model loading and inference must
 also pass. These commands cover TTS, TTSD and Speech, not MOSS-SoundEffect (SFX).
-No addon CUDA/Vulkan hardware run has been completed for this test change yet.
+To validate the fresh packaged addons on the provisioned Linux GPU runner,
+dispatch the existing integration workflow on the branch being tested:
+
+```sh
+gh workflow run integration-test-nx.yml --repo tetherto/qvac --ref <branch> -f moss_packaged_gpu=true
+```
+
+This opt-in mode retains the `release` environment gate and builds both addons
+from the dispatch SHA with build concurrency capped at two. It stages the fresh
+platform packages through `link:platform`, verifies that both CUDA and Vulkan
+plugins are present, then runs CUDA and Vulkan sequentially. Each backend must
+pass the 12 TTS/TTSD/Speech tests above, two SFX tests (including exact backend
+and no-fallback assertions for both GPU clips), and the focused ASR Spanish
+transcription test with default and hotword prompts. Fixture skips fail the run.
+CPU control cases remain part of the TTS/SFX suites.
+
+The runner stages q8_0 TTS/TTSD/Speech/SFX backbones and q5_0 Transcribe, with
+the required codec precision preserved. TTS/TTSD q8_0 are generated on the
+runner from the source checkpoints using the pinned native quantizer. The
+artifacts retain source pins, model and prebuild hashes, the fresh prebuilds,
+and per-backend logs/results; model weights are removed and never uploaded.
+This mode does not publish. A dispatched or building run is not GPU validation:
+only passing case logs from both backends establish packaged-addon coverage.
 
 Without strict mode, developer behavior is unchanged: an unpinned run accepts
 the normal GPU cascade, missing model directories skip tests, and missing
@@ -1551,6 +1598,7 @@ Runnable demos under `examples/`:
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
 | `cosyvoice-tts.js` | CosyVoice3 batch synth with the cross-engine emotion option (24 kHz; CPU by default, `--gpu` opts into Metal / desktop Vulkan / Android GPU). `bare examples/cosyvoice-tts.js --gpu "Hello" happy` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
+| `audio8-streaming.js` | Measure Audio8 wrapper batch, streaming, or duplex latency: `bare examples/audio8-streaming.js ./models stream "Hello"`. Modes: `batch`, `stream`, `duplex`. |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for the desktop GPU backend (CUDA or Vulkan on linux, Vulkan on Windows). `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 | `moss-tts.js` | MOSS batch synth, optionally cloning a reference. Set `QVAC_TTS_MOSS_STREAM_FRAMES=25` for native chunk streaming, `QVAC_TTS_MOSS_DURATION=38` for a target length and `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-tts.js "Hello" voice.wav` |
 | `moss-sound-effect.js` | MOSS-SoundEffect text-to-sound-effects at 48 kHz. Set `QVAC_TTS_MOSS_SFX_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SFX_STEPS` to trade quality for time. `bare examples/moss-sound-effect.js "Rain on a tin roof." 5` |
@@ -1721,5 +1769,10 @@ OpenCL; Xclipse and Mali use Vulkan).
 Apache-2.0.  See [LICENSE](./LICENSE).
 
 ## Pocket TTS
+
+The native `speech-cpp` dependency includes Pocket Metal, CUDA, Vulkan and
+OpenCL support in the native library. The JavaScript Pocket API continues
+to require `config.useGPU: false`; updating the native dependency does not
+remove that addon validation.
 
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.

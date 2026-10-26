@@ -1,5 +1,138 @@
 # Changelog
 
+## [0.64.2] - 2026-10-23
+
+### Added
+
+- External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
+  llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
+  without MTP layers, or a Gemma 4 assistant for its Gemma 4 model. The head
+  is placed like the model, and the load's fit and `assessFit` count its
+  weights and context; fabric cannot measure a Gemma 4 assistant, so they
+  leave it out. A head with another hidden width or vocabulary than the
+  model fails the load, and `assessFit` refuses it with `unsupported-config`
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+### Fixed
+
+- `assessFit` with `spec-type: 'draft-mtp'` now counts the MTP draft context
+  in its per-device figures (`devices`, `deviceBytes`, `hostBytes`), not only
+  in its verdict, so their totals match what the load uses. As in fabric's
+  fit, the draft side's rows follow the placement the load asked for
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` refuses `spec-type: 'draft-mtp'` on a model without MTP layers
+  with `unsupported-config`, as the load fails, instead of projecting the
+  load without the MTP context
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` reports `model-unreadable` for a `spec-draft-model` that is not
+  a regular file, such as a directory, as the load rejects it, instead of
+  projecting the load without it
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+## [0.64.1] - 2026-10-23
+
+### Fixed
+
+- Tool schemas and past tool-call arguments now keep the caller's key order.
+  They were sorted alphabetically before reaching the chat template, so the
+  tool-call grammar rejected arguments written in the declared order and models
+  dropped fields, wrote broken values or never finished the call. The README's
+  tool-calling section documents the order the grammar enforces
+  ([#5272](https://github.com/tetherto/qvac/pull/5272)).
+- A single streamed `run()` on a model loaded with `parallel >= 2` no longer
+  repeats its complete answer as the final chunk. Text and tool-call markup
+  are delivered once, while batch results and terminal statistics are preserved
+  ([#5295](https://github.com/tetherto/qvac/pull/5295)).
+- Prefilling a system prompt and tools with `prefill: true` now preserves a
+  reusable prefix on chat templates that require a user turn, including Qwen3.5.
+  The prefill generates no answer; a later text or image question can reuse the
+  prefix when the system prompt, tools and rendering settings match. Templates
+  without a safe reusable prefix retain normal rendering
+  ([#5256](https://github.com/tetherto/qvac/pull/5256)).
+
+## [0.64.0] - 2026-10-20
+
+### Added
+
+- Bounded FuzzTest coverage for `forLogMessage`, `toLowerAscii`, and
+  `matchesAnyStopString`. Linux C++ CI runs the suite after unit tests. The
+  targets compile without `@qvac/fabric`, so ASan and LeakSanitizer stay at
+  full strength. No public addon API changes.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.23.0`, which carries
+  `qvac-fabric` `11018.2.0` -> `11259.0.0`, a rebase onto upstream llama.cpp
+  b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171)). A caret on a
+  `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.23.0`
+  on its own. The native API changes, so the native addon is rebuilt against
+  the 0.23.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.0` together.
+- Speculative decoding on multimodal prompts takes each image or audio
+  embedding sub-batch from fabric's new `mtmd_helper_embd_batch` callback
+  argument, wrapped without copying
+  ([#5171](https://github.com/tetherto/qvac/pull/5171)). No API change for
+  this package.
+
+## [0.63.0] - 2026-10-19
+
+### Added
+
+- MTP speculative decoding, ported from llama-server: `spec-type: 'draft-mtp'`
+  (with `spec-draft-n-max`, `spec-draft-n-min`, `spec-draft-p-min`, also in
+  underscore spelling) drafts with the model's own multi-token-prediction head
+  and verifies each draft in one decode, on single prompts, multimodal prompts
+  and continuous batching, with `cacheKey` conversations. Runtime stats report
+  `draftTokens` and `draftAcceptedTokens`. `spec-draft-n-max` is lowered at
+  load to fit one `ubatch-size` and each sequence's share of `batch-size`.
+  Qwen3.6-27B-MTP decodes about 2.4x faster on a single sequence on a Radeon
+  8060S ([#4849](https://github.com/tetherto/qvac/pull/4849)).
+- DFlash speculative decoding: `spec-type: 'draft-dflash'` with
+  `spec-draft-model` (absolute local path, also `spec_draft_model`), as
+  llama-server's `--spec-type draft-dflash -md <model>`. The DFlash model is
+  loaded next to the model and placed like it (`device`, `gpu-layers`);
+  drafting otherwise works as for MTP. The load's fit and `assessFit` pass it
+  to fabric as an extra model, but fabric cannot measure a DFlash model yet,
+  so neither counts its memory
+  ([#4849](https://github.com/tetherto/qvac/pull/4849)).
+
+## [0.62.0] - 2026-10-16
+
+### Added
+
+- `poll` and `poll-batch` are now documented public JavaScript load options.
+  They control the main and batch GGML threadpool busy-wait levels; both
+  default to `0`, `poll-batch` inherits an explicit `poll` when omitted, and
+  values outside `0`–`100` are rejected
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Changed
+
+- Single-sequence generation now uses `threads`, `cpu-mask` and `prio`.
+  `threads-batch` and `cpu-mask-batch` apply only to steps that process
+  several tokens at once: prompt processing, batched decoding across parallel
+  sequences, and speculative verification. Previously an explicit
+  `threads-batch` also capped generation and `cpu-mask` was ignored
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Fixed
+
+- File-backed model loads now default both GGML threadpools to `poll=0`, so
+  GPU-offloaded inference no longer keeps CPU workers busy-spinning between
+  graph work. The addon also reuses the threadpools owned by Fabric's common
+  initialization instead of creating duplicates
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+## [0.61.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, `assessFit` no longer fails with `0xC06D007E` when it is the
+  first fabric call in the process ([#5121](https://github.com/tetherto/qvac/pull/5121)). The addon now binds the
+  delay-loaded `@qvac/fabric` runtime when it loads, and loading throws an
+  error naming the fabric module if that fails.
+
 ## [0.61.0] - 2026-10-14
 
 ### Breaking
